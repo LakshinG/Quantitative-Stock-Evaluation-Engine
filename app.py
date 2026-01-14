@@ -7,9 +7,11 @@ from model_training import prepare_data, train_price_model, train_trend_model, p
 # Set page config
 st.set_page_config(page_title="Stock Predictor", layout="wide")
 
-st.title("📈 Stock Market Prediction App")
+st.title("Stock Market Data and Forcasts powered by ML")
 st.markdown("""
-This app scrapes data, visualizes historical stock prices, and predicts the next day's closing price and trend using Machine Learning.
+This tool was created to bridge the gap between historical data and future movements through Machine Learning. By scraping real-time market data for 500+ key tickers, including the entire S&P 500, this app provides more than just charts and news. It utilizes integrated linear and logistic regression models to forecast the next day’s closing price and trend direction.
+
+Explore a clean, data-first platform where you can visualize years of price action and leverage AI-powered confidence scores to help you stay one step ahead of the market.
 """)
 
 # Sidebar for controls
@@ -30,9 +32,9 @@ with st.sidebar:
     period = st.selectbox("Select History Period", ["1y", "2y", "5y", "10y"], index=1)
 
 # Main Data Loading
-data_load_state = st.text('Loading data...')
+data_load_state = st.text('Loading the graphs, just a second...!')
 df = get_stock_history(selected_ticker, period=period)
-data_load_state.text('Loading data... done!')
+data_load_state.text('Here is the Latest Data!')
 
 if df.empty:
     st.error(f"Could not load data for {selected_ticker}. Please try another ticker.")
@@ -53,7 +55,7 @@ else:
     st.plotly_chart(fig, use_container_width=True)
     
     # Model & Prediction
-    st.subheader("🔮 Predictions")
+    st.subheader("Current Predictions")
     
     if len(df) < 50:
         st.warning("Not enough data points to train models (need at least 50).")
@@ -90,4 +92,4 @@ else:
             confidence = prob[1] if pred_trend == 1 else prob[0]
             st.metric("Predicted Trend", trend_str, delta=f"Confidence: {confidence*100:.1f}%")
             
-        st.info("Note: These predictions are based on simple linear and logistic regression models using historical price data. Do not use for actual trading.")
+        st.info("Note: This app uses mathematical regression to project potential trends from past performance. Because market conditions are volatile, these predictions are not a guarantee of future results and are intended for research purposes only. This should not be considered financial advice or be used for live trading.")
