@@ -4,8 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { 
   Activity, TrendingUp, TrendingDown, Search, BarChart3, 
-  LayoutDashboard, LineChart as LineChartIcon, PieChart, 
-  Settings, Bell, Globe, Info
+  LayoutDashboard, LineChart as LineChartIcon, PieChart as PieChartIcon, 
+  Settings, Bell, Globe, Info, Briefcase
 } from "lucide-react";
 import { createChart, IChartApi, ColorType } from "lightweight-charts";
 import {
@@ -16,10 +16,15 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
-  Treemap
+  Treemap,
+  PieChart,
+  Pie,
+  Cell
 } from "recharts";
 
 const API_URL = "http://localhost:8000/api";
+
+const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'];
 
 function CandlestickChart({ data }: { data: any[] }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -90,7 +95,6 @@ const TreemapContent = (props: any) => {
   const { root, depth, x, y, width, height, index, name, performance } = props;
 
   if (depth === 1) {
-    // Sector Background
     return (
       <g>
         <rect
@@ -112,20 +116,18 @@ const TreemapContent = (props: any) => {
   }
 
   if (depth === 2) {
-    // Stock Box
     const isPos = performance >= 0;
     const absPerf = Math.abs(performance);
     
-    // Calculate color intensity based on performance
     let fill = '#1f2937';
     if (isPos) {
-       if (absPerf > 2) fill = '#166534'; // darker green
-       else if (absPerf > 1) fill = '#22c55e'; // green
-       else fill = '#4ade80'; // light green
+       if (absPerf > 2) fill = '#166534';
+       else if (absPerf > 1) fill = '#22c55e';
+       else fill = '#4ade80';
     } else {
-       if (absPerf > 2) fill = '#991b1b'; // darker red
-       else if (absPerf > 1) fill = '#ef4444'; // red
-       else fill = '#f87171'; // light red
+       if (absPerf > 2) fill = '#991b1b';
+       else if (absPerf > 1) fill = '#ef4444';
+       else fill = '#f87171';
     }
 
     return (
@@ -154,7 +156,6 @@ const TreemapContent = (props: any) => {
       </g>
     );
   }
-
   return null;
 };
 
@@ -183,12 +184,19 @@ export default function Dashboard() {
   const [stockData, setStockData] = useState<any>(null);
   const [sentiment, setSentiment] = useState<any>(null);
   const [backtest, setBacktest] = useState<any>(null);
+  const [fundamentals, setFundamentals] = useState<any>(null);
   
   // Markets/Sectors State
   const [marketMovers, setMarketMovers] = useState<any>(null);
   const [moversTab, setMoversTab] = useState("gainers");
   const [sectors, setSectors] = useState<any>(null);
   const [generalNews, setGeneralNews] = useState<any>(null);
+
+  // Portfolio State
+  const [portfolioInput, setPortfolioInput] = useState("AAPL, MSFT, NVDA, GOOGL, AMZN");
+  const [portfolioResults, setPortfolioResults] = useState<any>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioError, setPortfolioError] = useState("");
   
   const [loading, setLoading] = useState(false);
 
@@ -197,11 +205,13 @@ export default function Dashboard() {
     Promise.all([
       axios.get(`${API_URL}/stock/${ticker}?period=1y`),
       axios.get(`${API_URL}/sentiment/${ticker}`),
-      axios.get(`${API_URL}/backtest?ticker=${ticker}&period=2y`)
-    ]).then(([stockRes, sentimentRes, backtestRes]) => {
+      axios.get(`${API_URL}/backtest?ticker=${ticker}&period=2y`),
+      axios.get(`${API_URL}/fundamentals/${ticker}`)
+    ]).then(([stockRes, sentimentRes, backtestRes, fundRes]) => {
       setStockData(stockRes.data.data);
       setSentiment(sentimentRes.data);
       setBacktest(backtestRes.data);
+      setFundamentals(fundRes.data);
     }).catch(err => {
       console.error(err);
     }).finally(() => {
@@ -239,6 +249,22 @@ export default function Dashboard() {
     }
   };
 
+  const handleOptimizePortfolio = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPortfolioLoading(true);
+    setPortfolioError("");
+    axios.get(`${API_URL}/portfolio/optimize?tickers=${encodeURIComponent(portfolioInput)}`)
+      .then(res => {
+        setPortfolioResults(res.data);
+      })
+      .catch(err => {
+        setPortfolioError(err.response?.data?.detail || "Optimization failed. Check tickers.");
+      })
+      .finally(() => {
+        setPortfolioLoading(false);
+      });
+  };
+
   const latestPrice = stockData && stockData.length > 0 ? stockData[stockData.length - 1].Close : 0;
   const prevPrice = stockData && stockData.length > 1 ? stockData[stockData.length - 2].Close : 0;
   const priceChange = latestPrice - prevPrice;
@@ -258,8 +284,9 @@ export default function Dashboard() {
           <nav className="p-4 space-y-2">
             {[
               { name: "Dashboard", icon: LayoutDashboard },
+              { name: "Portfolio", icon: Briefcase },
               { name: "Markets", icon: LineChartIcon },
-              { name: "Sectors", icon: PieChart },
+              { name: "Sectors", icon: PieChartIcon },
               { name: "News", icon: Globe }
             ].map(item => (
               <button 
@@ -315,11 +342,12 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
-            <div className="max-w-7xl mx-auto space-y-6 h-full">
+            <div className="max-w-7xl mx-auto space-y-6 h-full pb-10">
               
               {/* --- DASHBOARD TAB --- */}
               {activeTab === "Dashboard" && (
                 <>
+                  {/* Top Stats */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-[#0f1115] border border-white/5 rounded-lg p-4 flex flex-col justify-between">
                       <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Symbol</span>
@@ -378,27 +406,55 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {/* Charts & Fundamentals */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-[#0f1115] border border-white/5 rounded-lg p-5 flex flex-col">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">{selectedTicker} Price Action</h3>
-                        <div className="flex gap-2">
-                           <span className="text-xs px-2 py-1 bg-white/5 rounded text-gray-400 cursor-pointer hover:bg-white/10">1D</span>
-                           <span className="text-xs px-2 py-1 bg-white/5 rounded text-gray-400 cursor-pointer hover:bg-white/10">1W</span>
-                           <span className="text-xs px-2 py-1 bg-white/5 rounded text-gray-400 cursor-pointer hover:bg-white/10">1M</span>
+                    <div className="lg:col-span-2 flex flex-col gap-6">
+                      {/* Candlestick */}
+                      <div className="bg-[#0f1115] border border-white/5 rounded-lg p-5 flex flex-col h-[480px]">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">{selectedTicker} Price Action</h3>
+                          <div className="flex gap-2">
+                             <span className="text-xs px-2 py-1 bg-white/5 rounded text-gray-400 cursor-pointer hover:bg-white/10">1D</span>
+                             <span className="text-xs px-2 py-1 bg-white/5 rounded text-gray-400 cursor-pointer hover:bg-white/10">1W</span>
+                             <span className="text-xs px-2 py-1 bg-white/5 rounded text-gray-400 cursor-pointer hover:bg-white/10">1M</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 w-full relative">
+                          {stockData && stockData.length > 0 ? (
+                            <CandlestickChart data={stockData} />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-sm">No data</div>
+                          )}
                         </div>
                       </div>
-                      <div className="flex-1 w-full relative">
-                        {stockData && stockData.length > 0 ? (
-                          <CandlestickChart data={stockData} />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-sm">No data</div>
-                        )}
+
+                      {/* Fundamentals Panel */}
+                      <div className="bg-[#0f1115] border border-white/5 rounded-lg p-5">
+                        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Fundamental Analysis</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {[
+                            { label: "Market Cap", value: fundamentals?.market_cap },
+                            { label: "P/E Ratio (TTM)", value: fundamentals?.pe_ratio },
+                            { label: "Forward P/E", value: fundamentals?.forward_pe },
+                            { label: "Div Yield", value: fundamentals?.dividend_yield },
+                            { label: "52W High", value: fundamentals?.high_52w },
+                            { label: "52W Low", value: fundamentals?.low_52w },
+                            { label: "Avg Volume", value: fundamentals?.volume },
+                            { label: "Analyst Rating", value: fundamentals?.analyst_rating, highlight: true }
+                          ].map(f => (
+                            <div key={f.label} className="flex flex-col p-3 bg-[#16181d] rounded-md border border-white/5">
+                              <span className="text-[10px] text-gray-500 uppercase font-semibold">{f.label}</span>
+                              <span className={`text-sm font-bold mt-1 ${f.highlight && f.value !== 'N/A' ? 'text-blue-400' : 'text-gray-200'}`}>
+                                {f.value || '-'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
                     <div className="lg:col-span-1 flex flex-col gap-6">
-                      <div className="bg-[#0f1115] border border-white/5 rounded-lg p-5 flex-1 flex flex-col">
+                      <div className="bg-[#0f1115] border border-white/5 rounded-lg p-5 flex-1 flex flex-col min-h-[400px]">
                         <div className="flex justify-between items-center mb-4">
                           <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Live News & Sentiment</h3>
                           <button onClick={() => setActiveTab('News')} className="text-xs text-blue-400 hover:text-blue-300">View All</button>
@@ -422,48 +478,149 @@ export default function Dashboard() {
                           )}
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#0f1115] border border-white/5 rounded-lg p-5">
-                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Strategy Backtest vs Benchmark</h3>
-                     </div>
-                     <div className="h-[250px] w-full">
-                      {backtest && !backtest.error ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={backtest.history}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                            <XAxis dataKey="date" stroke="#4b5563" tick={{fill: '#6b7280', fontSize: 10}} tickLine={false} axisLine={false} minTickGap={50} />
-                            <YAxis stroke="#4b5563" domain={['auto', 'auto']} tick={{fill: '#6b7280', fontSize: 10}} tickFormatter={(val) => `$${val.toLocaleString()}`} tickLine={false} axisLine={false} width={60} />
-                            <RechartsTooltip 
-                              contentStyle={{backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#FFF', fontSize: '12px'}}
-                              itemStyle={{fontWeight: 'bold', fontFamily: 'monospace'}}
-                              formatter={(value: any) => [`$${Number(value).toFixed(2)}`, undefined]}
-                            />
-                            <Line type="stepAfter" dataKey="strategy_value" name="Model Strategy" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{r: 4, fill: '#3b82f6', stroke: '#09090b', strokeWidth: 2}} />
-                            <Line type="monotone" dataKey="benchmark_value" name="Buy & Hold" stroke="#6b7280" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      ) : (
-                         <div className="h-full flex items-center justify-center text-xs text-gray-600">Backtest data unavailable</div>
-                      )}
+                      
+                      <div className="bg-[#0f1115] border border-white/5 rounded-lg p-5 h-[280px] flex flex-col">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Strategy Backtest</h3>
+                        </div>
+                        <div className="flex-1 w-full">
+                          {backtest && !backtest.error ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={backtest.history}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                                <XAxis dataKey="date" stroke="#4b5563" tick={{fill: '#6b7280', fontSize: 10}} tickLine={false} axisLine={false} minTickGap={50} />
+                                <YAxis stroke="#4b5563" domain={['auto', 'auto']} hide />
+                                <RechartsTooltip 
+                                  contentStyle={{backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#FFF', fontSize: '12px'}}
+                                  itemStyle={{fontWeight: 'bold', fontFamily: 'monospace'}}
+                                  formatter={(value: any) => [`$${Number(value).toFixed(2)}`, undefined]}
+                                />
+                                <Line type="stepAfter" dataKey="strategy_value" name="Model Strategy" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{r: 4, fill: '#3b82f6', stroke: '#09090b', strokeWidth: 2}} />
+                                <Line type="monotone" dataKey="benchmark_value" name="Buy & Hold" stroke="#6b7280" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-xs text-gray-600">Unavailable</div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </>
               )}
 
+              {/* --- PORTFOLIO TAB --- */}
+              {activeTab === "Portfolio" && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-bold text-white">AI Portfolio Optimization</h2>
+                  
+                  <div className="bg-[#0f1115] border border-white/5 rounded-lg p-6">
+                    <p className="text-sm text-gray-400 mb-4">Enter a list of tickers to compute the optimal weight allocation using Modern Portfolio Theory (Max Sharpe Ratio).</p>
+                    <form onSubmit={handleOptimizePortfolio} className="flex gap-4">
+                      <input 
+                        type="text"
+                        value={portfolioInput}
+                        onChange={(e) => setPortfolioInput(e.target.value)}
+                        placeholder="AAPL, MSFT, TSLA, NVDA..."
+                        className="flex-1 bg-[#16181d] border border-white/10 rounded-md px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                      />
+                      <button 
+                        type="submit" 
+                        disabled={portfolioLoading}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-semibold transition-colors disabled:opacity-50"
+                      >
+                        {portfolioLoading ? 'Optimizing...' : 'Run Optimization'}
+                      </button>
+                    </form>
+                    {portfolioError && <p className="text-red-500 text-sm mt-3">{portfolioError}</p>}
+                  </div>
+
+                  {portfolioResults && !portfolioError && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      
+                      {/* Chart */}
+                      <div className="md:col-span-1 bg-[#0f1115] border border-white/5 rounded-lg p-6 flex flex-col items-center justify-center min-h-[300px]">
+                        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Optimal Allocation</h3>
+                        <div className="w-full h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={portfolioResults.allocations}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="weight"
+                              >
+                                {portfolioResults.allocations.map((entry: any, index: number) => (
+                                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <RechartsTooltip 
+                                contentStyle={{backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)'}}
+                                itemStyle={{color: '#fff', fontWeight: 'bold'}}
+                                formatter={(value: number) => [`${value}%`, undefined]}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Stats & Table */}
+                      <div className="md:col-span-2 flex flex-col gap-6">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="bg-[#0f1115] border border-white/5 rounded-lg p-4">
+                            <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Expected Return (1Y)</span>
+                            <h2 className="text-2xl font-bold text-green-500 mt-2">+{portfolioResults.expected_return_pct}%</h2>
+                          </div>
+                          <div className="bg-[#0f1115] border border-white/5 rounded-lg p-4">
+                            <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Volatility (Risk)</span>
+                            <h2 className="text-2xl font-bold text-red-400 mt-2">{portfolioResults.expected_volatility_pct}%</h2>
+                          </div>
+                          <div className="bg-[#0f1115] border border-white/5 rounded-lg p-4">
+                            <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Sharpe Ratio</span>
+                            <h2 className="text-2xl font-bold text-blue-400 mt-2">{portfolioResults.sharpe_ratio}</h2>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#0f1115] border border-white/5 rounded-lg overflow-hidden flex-1">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="bg-white/5 border-b border-white/5">
+                                <th className="px-6 py-3 text-xs font-semibold text-gray-400 uppercase">Ticker</th>
+                                <th className="px-6 py-3 text-xs font-semibold text-gray-400 uppercase text-right">Target Weight</th>
+                                <th className="px-6 py-3 text-xs font-semibold text-gray-400 uppercase text-center">Color</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {portfolioResults.allocations.map((a: any, i: number) => (
+                                <tr key={a.ticker} className="border-b border-white/5 last:border-0 hover:bg-white/5">
+                                  <td className="px-6 py-4 font-bold text-white">{a.ticker}</td>
+                                  <td className="px-6 py-4 font-mono text-right text-gray-300">{a.weight}%</td>
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="w-3 h-3 rounded-full mx-auto" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}></div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* --- MARKETS TAB --- */}
               {activeTab === "Markets" && (
                 <div className="max-w-4xl mx-auto space-y-6">
-                  {/* Stocks On The Move Card */}
                   <div className="bg-white rounded-lg overflow-hidden shadow text-gray-900">
                     <div className="flex items-center justify-between p-4 border-b border-gray-200">
                       <h2 className="text-xl font-bold text-gray-900">Stocks On The Move</h2>
                       <Info className="text-gray-400" size={20} />
                     </div>
                     
-                    {/* Tabs */}
                     <div className="flex border-b border-gray-200 px-4">
                       {["Top Gainers", "Top Losers", "Most Active"].map(tab => {
                         const key = tab.split(' ')[1]?.toLowerCase() || 'actives';
@@ -482,7 +639,6 @@ export default function Dashboard() {
                       })}
                     </div>
 
-                    {/* Table */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
@@ -494,7 +650,7 @@ export default function Dashboard() {
                           </tr>
                         </thead>
                         <tbody>
-                          {marketMovers && marketMovers[moversTab]?.map((m: any, idx: number) => {
+                          {marketMovers && marketMovers[moversTab]?.map((m: any) => {
                              const isPos = m.change_pct >= 0;
                              const colorClass = isPos ? 'text-green-600' : 'text-red-600';
                              const sparklineData = m.chart_data?.map((val: number, i: number) => ({ index: i, value: val })) || [];
@@ -533,18 +689,13 @@ export default function Dashboard() {
                         </tbody>
                       </table>
                     </div>
-                    <div className="bg-gray-50 p-3 text-right">
-                      <button className="text-sm text-blue-600 font-semibold hover:underline">
-                        More {moversTab === 'actives' ? 'Most Active' : moversTab === 'gainers' ? 'Top Gainers' : 'Top Losers'} &gt;
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}
 
               {/* --- SECTORS TAB --- */}
               {activeTab === "Sectors" && (
-                <div className="h-full flex flex-col space-y-4 pb-10">
+                <div className="h-full flex flex-col space-y-4">
                   <h2 className="text-xl font-bold text-white shrink-0">Market Heatmap</h2>
                   <div className="flex-1 w-full bg-[#09090b] min-h-[600px] border border-white/5 rounded-lg overflow-hidden">
                     {sectors && sectors.length > 0 ? (

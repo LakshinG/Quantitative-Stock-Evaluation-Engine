@@ -137,6 +137,49 @@ def api_news():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/fundamentals/{ticker}")
+def api_fundamentals(ticker: str):
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        def format_large_number(num):
+            if not num: return "N/A"
+            if num >= 1e12: return f"${num/1e12:.2f}T"
+            if num >= 1e9: return f"${num/1e9:.2f}B"
+            if num >= 1e6: return f"${num/1e6:.2f}M"
+            return f"${num}"
+
+        return {
+            "market_cap": format_large_number(info.get("marketCap")),
+            "pe_ratio": round(info.get("trailingPE", 0), 2) if info.get("trailingPE") else "N/A",
+            "forward_pe": round(info.get("forwardPE", 0), 2) if info.get("forwardPE") else "N/A",
+            "dividend_yield": f"{round(info.get('dividendYield', 0) * 100, 2)}%" if info.get("dividendYield") else "N/A",
+            "high_52w": f"${info.get('fiftyTwoWeekHigh', 'N/A')}" if info.get('fiftyTwoWeekHigh') else "N/A",
+            "low_52w": f"${info.get('fiftyTwoWeekLow', 'N/A')}" if info.get('fiftyTwoWeekLow') else "N/A",
+            "analyst_rating": info.get("recommendationKey", "N/A").replace('_', ' ').title(),
+            "target_price": f"${info.get('targetMeanPrice', 'N/A')}" if info.get('targetMeanPrice') else "N/A",
+            "volume": format_large_number(info.get("volume", 0)).replace('$', '')
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+from portfolio import optimize_portfolio
+
+@app.get("/api/portfolio/optimize")
+def api_portfolio_optimize(tickers: str):
+    # expect tickers as comma separated string e.g. "AAPL,MSFT,NVDA"
+    try:
+        ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+        result = optimize_portfolio(ticker_list)
+        if "error" in result:
+             raise HTTPException(status_code=400, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
