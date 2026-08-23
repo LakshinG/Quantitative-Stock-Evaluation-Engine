@@ -34,7 +34,7 @@ def optimize_portfolio(tickers, risk_free_rate=0.04):
         mean_returns = returns.mean() * 252
         cov_matrix = returns.cov() * 252
         
-        num_portfolios = 5000
+        num_portfolios = 6500
         num_assets = len(tickers)
         
         results = np.zeros((3, num_portfolios))
