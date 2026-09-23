@@ -1,21 +1,42 @@
-StockTrend-Predictor
-Quantitative Stock Analysis and Trend Forecasting using Streamlit & Scikit-Learn
-This application leverages historical market data to perform time-series forecasting and trend classification. 
-By integrating data scraping via the yfinance API with Random Forest Regressors and Classification models, 
-the tool provides both price estimation and directional trend confidence for various equity tickers.
+# Quantitative Stock Evaluation Engine
 
+A full-stack, Bloomberg-style financial terminal built with Next.js, FastAPI, and Python. This platform integrates real-time market data, AI-driven sentiment analysis, quantitative strategy backtesting, and Modern Portfolio Theory optimization.
 
-1. Clone the Repository
+## Features
 
-2. Install Dependencies:
+- **Interactive Dashboard**: High-performance candlestick charts and real-time fundamentals via TradingView's Lightweight Charts and Recharts.
+- **AI Sentiment Analysis**: Utilizes `ProsusAI/finbert` (run locally via PyTorch & HuggingFace) to score live news headlines from yfinance as Bullish or Bearish.
+- **Strategy Backtester**: Simulates historical trading returns using Scikit-Learn Random Forest models against a Buy & Hold benchmark.
+- **Market Heatmap**: Interactive S&P 500 sector treemap to visualize market movers based on market cap and daily performance.
+- **Portfolio Optimization**: Uses Monte Carlo simulations (6,500 iterations) to find the mathematically perfect portfolio allocation to maximize the Sharpe Ratio (Modern Portfolio Theory).
+
+## Tech Stack
+
+- **Frontend**: Next.js (App Router), TypeScript, Tailwind CSS v4, Recharts, Lightweight-Charts.
+- **Backend**: FastAPI, Uvicorn, Python, Pandas, NumPy, Scikit-Learn, PyTorch, Transformers.
+
+## Getting Started
+
+### 1. Backend Setup
+
+```bash
+# Install dependencies
 pip install -r requirements.txt
 
-3. Launch the App:
-streamlit run app.py
+# Start the FastAPI server
+python api.py
+```
+*The backend will run on `http://localhost:8000`*
 
-4. Analyze Equities:
-Select Ticker: Choose from various market indices (e.g., AAPL, MSFT).
+### 2. Frontend Setup
 
-History Period: Define the look-back window (e.g., "2y") to adjust the training dataset size.
+```bash
+cd frontend
 
-Review Forecasts: Analyze the Predicted Close Price alongside the Trend Confidence percentage.
+# Install dependencies
+npm install
+
+# Start the Next.js dev server
+npm run dev
+```
+*The frontend will run on `http://localhost:3000`*
